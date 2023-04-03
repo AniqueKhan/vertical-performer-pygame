@@ -7,6 +7,10 @@ pg.init()
 # Screen Dimensions
 SCREEN_WIDTH, SCREEN_HEIGHT = 400, 600
 
+# Clock 
+clock = pg.time.Clock()
+FPS=60
+
 # Define Colors
 WHITE = (255,255,255)
 
@@ -29,7 +33,16 @@ class Performer():
 
     def draw(self):
         screen.blit(self.image,(self.rect.x-12,self.rect.y-5))
-        pg.draw.rect(screen,WHITE,self.rect,2)
+        # pg.draw.rect(screen,WHITE,self.rect,2)
+
+    def move(self):
+        # key presses
+        key = pg.key.get_pressed()
+
+        if key[pg.K_a]:
+            self.rect.x-=10
+        if key[pg.K_d]:
+            self.rect.x+=10
 
 performer = Performer(x=SCREEN_WIDTH//2, y=SCREEN_HEIGHT-150)
 
@@ -38,6 +51,10 @@ performer = Performer(x=SCREEN_WIDTH//2, y=SCREEN_HEIGHT-150)
 # Game Loop
 run = True
 while run:
+    clock.tick(FPS  )
+
+    # Move Performer
+    performer.move()
 
     # Draw Background
     screen.blit(source=bg_image, dest=(0,0))
