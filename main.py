@@ -1,6 +1,7 @@
 # Import Libraries
 import pygame as pg
 import random
+import os
 
 # Initialize Game
 pg.init()
@@ -17,12 +18,19 @@ GRAVITY = 1
 MAX_PLATFORMS = 10
 SCROLL_THRESHOLD = 200
 scroll = bg_scroll = score = fade_counter = 0
-
 game_over = False
+
+# Read High Score From score.txt
+if os.path.exists("score.txt"):
+    with open('score.txt','r') as file:
+        high_score = int(file.read())
+else:
+    high_score=0
 
 # Define Colors
 WHITE = (255,255,255)
 BLACK = (0,0,0)
+PANEL = (153,217,234)
 
 # Define Font
 font_small = pg.font.SysFont(name="Lucida Sans", size=20)
@@ -47,14 +55,24 @@ def draw_text(text,font,text_color,x,y):
     img = font.render(text,True,text_color)
     screen.blit(source=img, dest=(x,y))
 
+# Function for drawing info panel
+def draw_panel():
+    pg.draw.rect(surface=screen,color=PANEL,rect=(0,0,SCREEN_WIDTH,30))
+    pg.draw.line(surface=screen,color=WHITE,start_pos=(0,30),end_pos=(SCREEN_WIDTH,30),width=2)
+    draw_text(text="SCORE: "+str(score), font=font_small, text_color=WHITE, x=0, y=0)
+    draw_text(text="HIGH SCORE: "+str(high_score), font=font_small, text_color=WHITE, x=SCREEN_WIDTH-200, y=0)
+
 # Platform Class
 class Platform(pg.sprite.Sprite):
-    def __init__(self,x,y,width):
+    def __init__(self,x,y,width,moving):
         pg.sprite.Sprite.__init__(self)
         self.image = pg.transform.scale(platform_image,(width,10))
         self.rect = self.image.get_rect()
         self.rect.x = x
         self.rect.y = y
+        self.moving=moving
+        self.move_counter = random.randint(0, 50)
+        self.direction = random.choice([-1,1])
 
     def update(self,scroll):
         # update platform's vertical position
@@ -134,7 +152,7 @@ performer = Performer(x=SCREEN_WIDTH//2, y=SCREEN_HEIGHT-150)
 platform_group = pg.sprite.Group()
 
 # starting platform
-platform = Platform(x=SCREEN_WIDTH//2 - 50, y=SCREEN_HEIGHT-50, width=100)
+platform = Platform(x=SCREEN_WIDTH//2 - 50, y=SCREEN_HEIGHT-50, width=100,moving=False)
 platform_group.add(platform)
 
 # Game Loop
@@ -160,7 +178,12 @@ while run:
             platform_width = random.randint(a=40, b=60)
             platform_x = random.randint(a=0, b=SCREEN_WIDTH-platform_width)
             platform_y=platform.rect.y-random.randint(a=80, b=120)
-            platform = Platform(x=platform_x,y=platform_y,width=platform_width)
+            platform_type = random.randint(1, 2)
+            if platform_type == 1:
+                platform_moving = True
+            else:
+                platform_moving=False
+            platform = Platform(x=platform_x,y=platform_y,width=platform_width,moving=platform_moving)
             platform_group.add(platform)
 
 
@@ -171,8 +194,18 @@ while run:
         # Update Platform
         platform_group.update(scroll=scroll)
 
+        # Update Score
+        if scroll > 0:
+            score+=scroll
+
+        # Draw line at previous high score
+        pg.draw.line(surface=screen,color=WHITE,start_pos=(0,score-high_score+SCROLL_THRESHOLD),end_pos=(SCREEN_WIDTH,score-high_score+SCROLL_THRESHOLD),width=3)
+        draw_text(text="HIGH SCORE", font=font_small, text_color=WHITE, x=SCREEN_WIDTH-130, y=score-high_score+SCROLL_THRESHOLD)
         # Draw Performer
         performer.draw()
+
+        # Draw Panel
+        draw_panel()
 
         # Check game over
         if performer.rect.top > SCREEN_HEIGHT:
@@ -184,28 +217,35 @@ while run:
             for y in range(0,6,2):
                 pg.draw.rect(surface=screen,color=BLACK,rect=(0,y*100,fade_counter,SCREEN_HEIGHT/6))
                 pg.draw.rect(surface=screen,color=BLACK,rect=(SCREEN_WIDTH-fade_counter,(y+1)*100,SCREEN_WIDTH,SCREEN_HEIGHT/6))
-        draw_text(text="Game Over!", font=font_big, text_color=WHITE, x=130, y=200)
-        draw_text(text="Score: "+str(score), font=font_small, text_color=WHITE, x=150, y=250)
-        draw_text(text="Press space to play again!", font=font_big, text_color=WHITE, x=40, y=300)
+        else:
+            draw_text(text="Game Over!", font=font_big, text_color=WHITE, x=130, y=200)
+            draw_text(text="Score: "+str(score), font=font_small, text_color=WHITE, x=150, y=250)
+            draw_text(text="Press space to play again!", font=font_big, text_color=WHITE, x=40, y=300)
 
-        # Looking for space bar being pressed
+            # Update high score
+            if score>high_score:
+                high_score=score
+                with open("score.txt","w") as file:
+                    file.write(str(high_score))
 
-        key = pg.key.get_pressed()
-        if key[pg.K_SPACE]:
-            
-            # Reset variables 
-            game_over = False
-            score = scroll = fade_counter = 0 
-            
-            # Reposition Performer
-            performer.rect.center = (SCREEN_WIDTH//2,SCREEN_HEIGHT-150)
+            # Looking for space bar being pressed
 
-            # Reset Platforms
-            platform_group.empty()
+            key = pg.key.get_pressed()
+            if key[pg.K_SPACE]:
+                
+                # Reset variables 
+                game_over = False
+                score = scroll = fade_counter = 0 
+                
+                # Reposition Performer
+                performer.rect.center = (SCREEN_WIDTH//2,SCREEN_HEIGHT-150)
 
-            # starting platform
-            platform = Platform(x=SCREEN_WIDTH//2 - 50, y=SCREEN_HEIGHT-50, width=100)
-            platform_group.add(platform)
+                # Reset Platforms
+                platform_group.empty()
+
+                # starting platform
+                platform = Platform(x=SCREEN_WIDTH//2 - 50, y=SCREEN_HEIGHT-50, width=100,moving=False)
+                platform_group.add(platform)
 
 
     # Event handler
