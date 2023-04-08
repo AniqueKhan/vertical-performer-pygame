@@ -9,6 +9,9 @@ pg.init()
 # Screen Dimensions
 SCREEN_WIDTH, SCREEN_HEIGHT = 400, 600
 
+# Animation constant
+ANIMATION_COOLDOWN = 50
+
 # Clock 
 clock = pg.time.Clock()
 FPS = 60
@@ -45,6 +48,9 @@ bg_image = pg.image.load('assets/bg.png').convert_alpha()
 performer_image =pg.transform.scale(pg.image.load('assets/performer.png').convert_alpha(),(45,45))
 platform_image =pg.transform.scale(pg.image.load('assets/wood.png').convert_alpha(),(45,45))
 
+# Bird Spritesheet
+bird_image = pg.image.load('assets/bird.png').convert_alpha()
+
 # Function for drawing the background
 def draw_bg(bg_scroll):
     screen.blit(bg_image,(0,0+bg_scroll))
@@ -62,6 +68,66 @@ def draw_panel():
     draw_text(text="SCORE: "+str(score), font=font_small, text_color=WHITE, x=0, y=0)
     draw_text(text="HIGH SCORE: "+str(high_score), font=font_small, text_color=WHITE, x=SCREEN_WIDTH-200, y=0)
 
+# Helper Class
+class Spritesheet():
+    def __init__(self,image):
+        self.sheet = image
+
+    def get_image(self,frame,width,height,scale,color):
+        image = pg.Surface((width,height)).convert_alpha()
+        image.blit(self.sheet,(0,0),((frame*width),0,width,height))
+        image = pg.transform.scale(image,(int(width*scale),(int(height*scale))))
+        image.set_colorkey(color)
+        return image
+
+bird_sheet = Spritesheet(bird_image)
+
+class Enemy(pg.sprite.Sprite):
+    def __init__(self,y,sprite_sheet,scale):
+        pg.sprite.Sprite.__init__(self)
+        self.direction = random.choice([-1,1])
+        self.flip = True if self.direction == 1 else False
+        self.animation_list , self.frame_index , self.update_time = [] , 0 , pg.time.get_ticks()
+
+        # Load Images From Spritesheet
+        animation_steps = 8
+        for animation in range(animation_steps):
+            image = sprite_sheet.get_image(frame=animation,width=32,height=32,scale=scale,color=(0,0,0))
+            image = pg.transform.flip(image,self.flip,False)
+            image.set_colorkey((0,0,0))
+            self.animation_list.append(image)
+
+        # Select Starting Image and Create Rectangle From It
+        self.image = self.animation_list[self.frame_index]
+        self.rect = self.image.get_rect()
+        
+        self.rect.x = 0 if self.direction == 1 else SCREEN_WIDTH
+        self.rect.y = y
+        
+        
+
+    def update(self):
+        # update animation
+        self.image = self.animation_list[self.frame_index]
+
+        # check if enough time has passed since the last update
+        if pg.time.get_ticks() - self.update_time > ANIMATION_COOLDOWN:
+            self.frame_index+=1
+            self.update_time=pg.time.get_ticks()
+
+        # if the animation has run out then reset back to the start
+        if self.frame_index>=len(self.animation_list):
+            self.frame_index=0
+
+        # move enemy horizontally
+        self.rect.x+=self.direction*2
+        self.rect.y+=scroll
+
+        # check if gone off screen
+        if self.rect.right <0 or self.rect.left>SCREEN_WIDTH:
+            self.kill()
+
+
 # Platform Class
 class Platform(pg.sprite.Sprite):
     def __init__(self,x,y,width,moving):
@@ -70,11 +136,22 @@ class Platform(pg.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.x = x
         self.rect.y = y
-        self.moving=moving
-        self.move_counter = random.randint(0, 50)
+        self.moving = moving
+        self.move_counter = random.randint(a=0, b=50)
         self.direction = random.choice([-1,1])
+        self.speed = random.randint(a=1, b=2)
 
     def update(self,scroll):
+        # move platforms horizontally
+        if self.moving:
+            self.move_counter+=1
+            self.rect.x+=self.direction*self.speed
+
+        # change platform direction if it has moved fully or hit a wall
+        if self.move_counter>=100 or self.rect.left<0 or self.rect.right>SCREEN_WIDTH:
+            self.direction*=-1
+            self.move_counter=0
+        
         # update platform's vertical position
         self.rect.y+=scroll
 
@@ -149,7 +226,8 @@ class Performer():
 performer = Performer(x=SCREEN_WIDTH//2, y=SCREEN_HEIGHT-150)
 
 # sprite group
-platform_group = pg.sprite.Group()
+platform_group =  pg.sprite.Group()
+enemy_group = pg.sprite.Group()
 
 # starting platform
 platform = Platform(x=SCREEN_WIDTH//2 - 50, y=SCREEN_HEIGHT-50, width=100,moving=False)
@@ -179,20 +257,29 @@ while run:
             platform_x = random.randint(a=0, b=SCREEN_WIDTH-platform_width)
             platform_y=platform.rect.y-random.randint(a=80, b=120)
             platform_type = random.randint(1, 2)
-            if platform_type == 1:
+            if platform_type == 1 and score >500:
                 platform_moving = True
             else:
                 platform_moving=False
             platform = Platform(x=platform_x,y=platform_y,width=platform_width,moving=platform_moving)
             platform_group.add(platform)
 
-
-
         # Draw Platforms
         platform_group.draw(screen)
 
         # Update Platform
         platform_group.update(scroll=scroll)
+
+        # Generate Enemies
+        if len(enemy_group)==0 and score > 1000:
+            enemy = Enemy(y=100, sprite_sheet=bird_sheet, scale=1.5)
+            enemy_group.add(enemy)
+
+        # Draw Enemies
+        enemy_group.draw(screen)
+
+        # Update Enemies
+        enemy_group.update()
 
         # Update Score
         if scroll > 0:
@@ -201,6 +288,7 @@ while run:
         # Draw line at previous high score
         pg.draw.line(surface=screen,color=WHITE,start_pos=(0,score-high_score+SCROLL_THRESHOLD),end_pos=(SCREEN_WIDTH,score-high_score+SCROLL_THRESHOLD),width=3)
         draw_text(text="HIGH SCORE", font=font_small, text_color=WHITE, x=SCREEN_WIDTH-130, y=score-high_score+SCROLL_THRESHOLD)
+        
         # Draw Performer
         performer.draw()
 
@@ -239,6 +327,9 @@ while run:
                 
                 # Reposition Performer
                 performer.rect.center = (SCREEN_WIDTH//2,SCREEN_HEIGHT-150)
+                
+                # Reset Enemies
+                enemy_group.empty()
 
                 # Reset Platforms
                 platform_group.empty()
