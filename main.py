@@ -5,6 +5,7 @@ import os
 
 # Initialize Game
 pg.init()
+pg.mixer.init()
 
 # Screen Dimensions
 SCREEN_WIDTH, SCREEN_HEIGHT = 400, 600
@@ -15,6 +16,17 @@ ANIMATION_COOLDOWN = 50
 # Clock 
 clock = pg.time.Clock()
 FPS = 60
+
+# Load Music and Sounds
+pg.mixer.music.load('assets/music.mp3')
+pg.mixer.music.set_volume(0.4)
+pg.mixer.music.play(-1,0.0,5000)
+
+jump_fx = pg.mixer.Sound('assets/jump.mp3')
+jump_fx.set_volume(0.5)
+
+death_fx = pg.mixer.Sound('assets/death.mp3')
+death_fx.set_volume(0.5)
 
 # Game Variables
 GRAVITY = 1
@@ -208,6 +220,8 @@ class Performer():
                         self.rect.bottom = platform.rect.top
                         dy=0
                         self.y_velocity=-20
+                        # play jump sound
+                        jump_fx.play()
 
 
         # check if the player has bounced to the top of the screen
@@ -219,6 +233,9 @@ class Performer():
         # Update rectangle position
         self.rect.x+=dx
         self.rect.y+=dy+scroll
+
+        # Create mask for better collision scenarios
+        self.mask = pg.mask.from_surface(self.image)
 
         return scroll
 
@@ -298,6 +315,14 @@ while run:
         # Check game over
         if performer.rect.top > SCREEN_HEIGHT:
             game_over=True
+            death_fx.play()
+        
+        # Check for collision with enemies
+        # Nesting the collision without the mask in order to make the computation faster
+        if pg.sprite.spritecollide(sprite=performer, group=enemy_group, dokill=False):
+            if pg.sprite.spritecollide(sprite=performer,group=enemy_group,dokill=False,collided=pg.sprite.collide_mask):
+                game_over=True
+                death_fx.play()
 
     else:
         if fade_counter < SCREEN_WIDTH:
